@@ -1,0 +1,19 @@
+{
+    "name": "Data Layer Verifier",
+    "description": "Verify your headless data layer events.",
+    "version": "1.0",
+    "manifest_version": 3,
+    "content_scripts": [
+        {
+            "matches": ["http://*/*", "https://*/*"],
+            "js": ["inject.js"],
+            "all_frames": true
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": ["index.js"],
+            "matches" : ["<all_urls>"]
+        }
+    ]
+}
