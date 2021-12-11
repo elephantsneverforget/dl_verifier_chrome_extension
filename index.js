@@ -16,5 +16,6 @@ Object.defineProperty(window.dataLayer, "push", {
 });
 
 function arrayElementAdded(val, n, other) {
+    evaluateDLEvent(other); 
     console.log(other);
 }

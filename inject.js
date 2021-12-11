@@ -1,8 +1,16 @@
-function injectScript(file_path, tag) {
-    var node = document.getElementsByTagName(tag)[0];
+function loadNextPlugin(plugins) {
+    var nextPlugin = plugins.shift();
+    // load it, and recursively invoke loadNextPlugin on the remaining queue
     var script = document.createElement('script');
     script.setAttribute('type', 'text/javascript');
-    script.setAttribute('src', file_path);
+    script.src = chrome.runtime.getURL(nextPlugin);
+    script.onload = function() {
+      if (plugins.length)
+        loadNextPlugin(plugins);
+    }
+    var node = document.getElementsByTagName('head')[0];
     node.appendChild(script);
-}
-injectScript(chrome.runtime.getURL('index.js'), 'body');
+  }
+  
+  
+  loadNextPlugin(["joi.js", "verifier.js", "index.js"]);

@@ -12,7 +12,7 @@
     ],
     "web_accessible_resources": [
         {
-            "resources": ["index.js"],
+            "resources": ["index.js", "joi.js", "toastify.js", "verifier.js"],
             "matches" : ["<all_urls>"]
         }
     ]
