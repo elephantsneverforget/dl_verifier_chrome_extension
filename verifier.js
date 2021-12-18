@@ -26,32 +26,160 @@ class Logger {
     // }
 }
 
-const getEventNameSchema = function (eventName) {
-    return joi.string().valid(eventName).required().messages({
-        "any.required": `"event" is a required field on the data layer object and should contain and event name such as dl_view_item, dl_add_to_cart etc...`, })
-};
+const products = joi
+    .array()
+    .items(
+        joi.object({
+            name: joi.string().min(1).required(),
+            id: joi.string().min(2).required().messages({
+                "any.required": `"id" is a required field on the ecommerce object and should represent the product SKU`,
+            }),
+            product_id: joi.string().min(5).required().messages({
+                "any.required": `"product_id" is a required field on the ecommerce object and should represent the product ID.`,
+            }),
+            variant_id: joi.string().min(2).required().messages({
+                "any.required": `"product_id" is a required field on the ecommerce object and should represent the Shopify variant ID.`,
+            }),
+            image: joi.string().required().messages({
+                "any.required": `"image" is a required field on the ecommerce object and should be a valid URL.`,
+            }),
+            brand: joi.string().required().messages({
+                "any.required": `"brand" is a required field on the ecommerce object.`,
+            }),
+            category: joi.string().required().messages({
+                "any.required": `"category" is a required field on the ecommerce object.`,
+            }),
+            variant: joi.string().required().messages({
+                "any.required": `"variant" is a required field on the ecommerce object.`,
+            }),
+            price: joi.string().required().messages({
+                "any.required": `"price" is a required field on the ecommerce object.`,
+            }),
+            inventory: joi.string().messages({
+                "any.required": `"inventory" is an optional field on the ecommerce object.`,
+            }),
+        }) // Must match
+    )
+    .min(1)
+    .required()
+    .messages({
+        "any.required": `You must have at least one product in the "products" array.`,
+    });
 
 const eventId = joi.string().min(7).required().messages({
     "any.required": `"event_id" is a required field. It should be a UUID like value.`,
 });
 
+joi.string().min(2).required().messages({
+    "any.required": `"cart_total" is a required field. It should contain the total value of the cart.`,
+});
+
+const getEventNameSchema = function (eventName) {
+    return joi.string().valid(eventName).required().messages({
+        "any.required": `"event" is a required field on the data layer object and should contain and event name such as dl_view_item, dl_add_to_cart etc...`,
+    });
+};
+
+const ecommerce = (action) => joi
+    .object()
+    .keys({
+        currencyCode: joi.string().min(3).max(3).required().messages({
+            "any.required": `"currencyCode" is a required field on the ecommerce object and should contain a currency code such as "USD".`,
+        }),
+        detail: joi
+            .object()
+            .keys({
+                actionField: actionField(action),
+                products: products,
+            })
+            .required(),
+    })
+    .required()
+    .messages({
+        "any.required": `"ecommerce" is a required field on the data layer object.`,
+    });
+
+const actionField = (action) => joi
+    .object()
+    .keys({
+        list: joi.string().required().messages({
+            "any.required": `"list" is a required field on the actionField object and should contain the collection path to the product.`,
+        }),
+        action: joi.string().required().messages({
+            "any.required": `"action" is a required field on the actionField object and should contain the string '${action}'`,
+        }),
+    })
+    .required();
+
+joi
+    .object()
+    .keys({
+        visitor_type: joi
+            .string()
+            .pattern(new RegExp("^logged in$"))
+            .required()
+            .messages({
+                "any.required": `"visitor_type" is a required field on the user_properties object and should be one of "logged in" or "guest".`,
+            }),
+        customer_id: joi.string().required().messages({
+            "any.required": `"customer_id" is a required field on the user_properties object and should contain the Shopify customer id.`,
+        }),
+        customer_email: joi.string().required().messages({
+            "any.required": `"customer_email" is a required field on the user_properties object and should contain the customer email.`,
+        }),
+        customer_order_count: joi.string().required().messages({
+            "any.required": `"customer_order_count" is a required field on the user_properties object and should contain the order count for the customer.`,
+        }),
+        customer_total_spent: joi.string().required().messages({
+            "any.required": `"customer_total_spent" is a required field on the user_properties object and should contain the total spent by the customer.`,
+        }),
+    })
+    .required()
+    .messages({
+        "any.required": `"user_properties" is a required field on the data layer object`,
+    });
+
+joi
+    .object()
+    .keys({
+        visitor_type: joi
+            .string()
+            .pattern(new RegExp("^guest$"))
+            .required()
+            .messages({
+                "any.required": `"visitor_type" is a required field on the user_properties object and should be one of "logged in" or "guest".`,
+            }),
+        user_id: joi.string().required().messages({
+            "any.required": `"user_id" is a required field on the user_properties object and should contain the Shopify customer id.`,
+        }),
+        user_consent: joi.string().required().messages({
+            "any.required": `"user_consent" is a required field on the user_properties object and should contain an empty string if not consent is present.`,
+        }),
+    })
+    .required()
+    .messages({
+        "any.required": `"user_properties" is a required field on the data layer object`,
+    });
+
 class DLEvent {
     constructor(dataLayerObject) {
         this.dataLayerObject = dataLayerObject;
-        this._verified = false;
-        this._errors;
+        this._verificationRun = false;
+        this._errors = [];
         this._verificationSummary;
         this._isValid;
     }
 
     verify(schemas, eventName) {
-        if (this._verified === true)
-            throw new Error("Can't call verify more than once.");
-        const dlEventSchema = joi.object().keys({
+        if (this._verificationRun === true)
+            throw new Error("Can't call verify more than once on the same object.");
+
+        const dlEventSchema = joi.object({
             event: getEventNameSchema(eventName),
             event_id: eventId,
             ...schemas,
         });
+
         const validation = dlEventSchema.validate(this.dataLayerObject, {
             abortEarly: false,
             allowUnknown: true
@@ -82,95 +210,68 @@ class DLEvent {
 
     logVerificationOutcome() {
         // Log details in console
-        Logger.logToToast(this._verificationSummary);
+        // Logger.logToToast(this._verificationSummary);
         // Log toast
         Logger.logToConsole(this._errors, this._verificationSummary);
     }
 }
 
-const products = joi
-    .array()
-    .items(
-        joi.object({
-            name: joi.string().min(1).required(),
-            id: joi.string().min(2).required().messages({
-                "any.required": `"id" is a required field on the ecommerce object and should represent the product SKU`,
-            }),
-            product_id: joi.string().min(5).required().messages({
-                "any.required": `"product_id" is a required field on the ecommerce object and should represent the product ID.`,
-            }),
-            variant_id: joi.string().min(2).required().messages({
-                "any.required": `"product_id" is a required field on the ecommerce object and should represent the Shopify variant ID.`,
-            }),
-            image: joi.string().required().messages({
-                "any.required": `"image" is a required field on the ecommerce object and should be a valid URL.`,
-            }),
-            brand: joi.string().required().messages({
-                "any.required": `"brand" is a required field on the ecommerce object.`,
-            }),
-            category: joi.string().required().messages({
-                "any.required": `"category" is a required field on the ecommerce object.`,
-            }),
-            variant: joi.string().required().messages({
-                "any.required": `"variant" is a required field on the ecommerce object.`,
-            }),
-            price: joi.string().required().messages({
-                "any.required": `"price" is a required field on the ecommerce object.`,
-            }),
-        }) // Must match
-    )
-    .min(1)
-    .required()
-    .messages({
-        "any.required": `You must have at least one product in the "products" array.`,
-    });
-
-const ecommerce = joi.object().keys({
-    currencyCode: joi.string().min(3).max(3).required().messages({
-        "any.required": `"currencyCode" is a required field on the ecommerce object and should contain a currency code such as "USD".`,
-    }),
-    detail: joi.object().keys({
-        actionField: joi.object().keys({
-            list: joi.string().required().messages({
-                "any.required": `"list" is a required field on the actionField object and should contain the collection path to the product.`,
-            }),
-            action: joi.string().required().messages({
-                "any.required": `"action" is a required field on the actionField object and should contain the string 'detail'`,
-            }),
-        }).required(),
-        products: products
-    }).required()
-}).required().messages({
-    'any.required': `"ecommerce" is a required field on the data layer object.`
-});
-
 const dl_view_item_schema_example = {
-    "event": "dl_view_item",
-    "event_id": "231f2c91-c2f3-421f-9d20-bb46a956e87a",
-    "ecommerce": {
-        "currencyCode": "USD",
-        "detail": {
-            "actionField": {
-                "list": "/collections/games",
-                "action": "detail"
+    event: "dl_view_item",
+    event_id: "231f2c91-c2f3-421f-9d20-bb46a956e87a",
+    ecommerce: {
+        currencyCode: "USD",
+        detail: {
+            actionField: {
+                list: "/collections/games",
+                action: "detail",
             },
-            "products": [
+            products: [
                 {
-                    "id": "CHESS-SET", // SKU
-                    "name": "Gold Chess Set",
-                    "brand": "Chess Inc.",
-                    "category": "Games",
-                    "variant": "Large Board",
-                    "price": "199.00",
-                    "list": "/collections/games",
-                    "product_id": "7112843886744",
-                    "variant_id": "41275778367640",
-                    "compare_at_price": "0.0",
-                    "image": "//cdn.shopify.com/s/files/1/0200/7616/products/arena-concrete-chess-set_f75103a8-2ecc-4d91-8d6c-d80b2501dbd7.png?v=1636459884",
-                    "inventory": "20"
-                }
-            ]
-        }
+                    id: "CHESS-SET", // SKU
+                    name: "Gold Chess Set",
+                    brand: "Chess Inc.",
+                    category: "Games",
+                    variant: "Large Board",
+                    price: "199.00",
+                    list: "/collections/games",
+                    product_id: "7112843886744",
+                    variant_id: "41275778367640",
+                    compare_at_price: "0.0",
+                    image: "//cdn.shopify.com/s/files/1/0200/7616/products/arena-concrete-chess-set_f75103a8-2ecc-4d91-8d6c-d80b2501dbd7.png?v=1636459884",
+                    inventory: "20",
+                },
+            ],
+        },
+    },
+};
+
+const dl_add_to_cart_schema_example = {
+    event: "dl_add_to_cart",
+    event_id: "887cb1e5-27ea-47c3-95a3-fdca8299e719",
+    ecommerce: {
+        currencyCode: "USD",
+        add: {
+            actionField: {
+                list: "/collections/puzzles",
+                action: "add",
+            },
+            products: [
+                {
+                    id: "0A-CLUE-BOX",
+                    name: "Clue Puzzle",
+                    brand: "iDVENTURE",
+                    category: "Puzzles",
+                    variant: null,
+                    price: "40",
+                    quantity: "1",
+                    list: "/collections/puzzles",
+                    product_id: "5074792185993",
+                    variant_id: "33922510782601",
+                    image: "https://cdn.shopify.com/s/files/1/0200/7616/products/Cluebox-1_098a06ca-1389-46cc-b34e-ec85c86e99df.png?v=1636419558",
+                },
+            ],
+        },
     },
 };
 
@@ -184,9 +285,26 @@ class DLEventViewItem extends DLEvent {
     verify() {
         return super.verify(
             {
-                ecommerce: ecommerce,
+                ecommerce: ecommerce('detail'),
             },
             "dl_view_item"
+        );
+    }
+}
+
+class DLEventAddToCart extends DLEvent {
+    constructor(dataLayerObject) {
+        super(dataLayerObject);
+        this.schemaExample = dl_add_to_cart_schema_example;
+    }
+
+    // Add anything additional to 'event_id' and 'event' that requires verification.
+    verify() {
+        return super.verify(
+            {
+                ecommerce: ecommerce('add'),
+            },
+            "dl_add_to_cart"
         );
     }
 }
@@ -195,9 +313,9 @@ function evaluateDLEvent(dlEvent) {
     const dlEventName = dlEvent.event;
     const dlEventMap = {
         dl_view_item: DLEventViewItem,
-        // 'dl_add_to_cart': DLAddToCart,
+        dl_add_to_cart: DLEventAddToCart,
     };
-    if (typeof dlEvent !== 'object') return;
+    if (typeof dlEvent !== "object") return;
     if (dlEventName in dlEventMap) {
         const dlEvent = new dlEventMap[dlEventName](dlEvent);
         dlEvent.verify();

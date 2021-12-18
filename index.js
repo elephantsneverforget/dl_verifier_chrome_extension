@@ -1,21 +1,30 @@
-console.log(window.dataLayer);
-window.dataLayer = [] || window.dataLayer;
+// initial = false
+window.dataLayer = window.dataLayer || [];
+__firstCall = true;
 Object.defineProperty(window.dataLayer, "push", {
     // hide from for..in and prevent further overrides (via default descriptor values)
     value: function () {
-        console.log('func called')
-        for (
-            var i = 0, n = this.length, l = arguments.length;
-            i < l;
-            i++, n++
-        ) {
-            arrayElementAdded(this, n, (this[n] = arguments[i])); // assign/raise your event
+        if (__firstCall) {
+            this.forEach((arrayItemAlreadyPresent) =>
+                dataLayerElementPushed(arrayItemAlreadyPresent)
+            );
+            __firstCall = false;
         }
-        return n;
+        existingArrayLength = this.length;
+        newArrayItemsToAppend = arguments;
+        for (
+            var i = 0;
+            i < newArrayItemsToAppend.length;
+            i++, existingArrayLength++
+        ) {
+            this[existingArrayLength] = arguments[i]; 
+            if (typeof arguments[i] !== "object") return;
+            dataLayerElementPushed(this[existingArrayLength]); // assign/raise your event
+        }
+        return existingArrayLength;
     },
 });
 
-function arrayElementAdded(val, n, other) {
-    evaluateDLEvent(other); 
+function dataLayerElementPushed(other) {
     console.log(other);
 }

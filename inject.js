@@ -8,8 +8,8 @@ function loadNextPlugin(plugins) {
       if (plugins.length)
         loadNextPlugin(plugins);
     }
-    var node = document.getElementsByTagName('head')[0];
-    node.appendChild(script);
+    var head = document.getElementsByTagName('head')[0];
+    head.appendChild(script);
   }
   
   
