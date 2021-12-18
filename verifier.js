@@ -26,6 +26,7 @@ class Logger {
     // }
 }
 
+// This file contains all schemas to check dl items against.
 const products = joi
     .array()
     .items(
@@ -50,6 +51,7 @@ const products = joi
                 "any.required": `"category" is a required field on the ecommerce object.`,
             }),
             variant: joi.string().required().messages({
+                "string.base": `"variant" should be a descriptive name of the product variant.`,
                 "any.required": `"variant" is a required field on the ecommerce object.`,
             }),
             price: joi.string().required().messages({
@@ -80,36 +82,36 @@ const getEventNameSchema = function (eventName) {
     });
 };
 
-const ecommerce = (action) => joi
-    .object()
-    .keys({
-        currencyCode: joi.string().min(3).max(3).required().messages({
-            "any.required": `"currencyCode" is a required field on the ecommerce object and should contain a currency code such as "USD".`,
-        }),
-        detail: joi
-            .object()
-            .keys({
-                actionField: actionField(action),
-                products: products,
-            })
-            .required(),
-    })
-    .required()
-    .messages({
-        "any.required": `"ecommerce" is a required field on the data layer object.`,
+const ecommerce = (conts) =>
+    joi
+        .object()
+        .keys({
+            currencyCode: joi.string().min(3).max(3).required().messages({
+                "any.required": `"currencyCode" is a required field on the ecommerce object and should contain a currency code such as "USD".`,
+            }),
+            [conts["ecommerceSubField"]]: joi
+                .object()
+                .keys({
+                    actionField: actionField(conts["actionField"]),
+                    products: products,
+                })
+                .required(),
+        })
+        .required()
+        .messages({
+            "any.required": `"ecommerce" is a required field on the data layer object.`,
+        });
+
+const stringSchema = (message) =>
+    joi.string().required().messages({
+        "any.required": message,
     });
 
-const actionField = (action) => joi
-    .object()
-    .keys({
-        list: joi.string().required().messages({
-            "any.required": `"list" is a required field on the actionField object and should contain the collection path to the product.`,
-        }),
-        action: joi.string().required().messages({
-            "any.required": `"action" is a required field on the actionField object and should contain the string '${action}'`,
-        }),
-    })
-    .required();
+const actionField = (action) =>
+    joi
+        .object()
+        .keys({ ...action })
+        .required();
 
 joi
     .object()
@@ -164,16 +166,15 @@ joi
 class DLEvent {
     constructor(dataLayerObject) {
         this.dataLayerObject = dataLayerObject;
-        this._verificationRun = false;
+        this._verificationhasBeenRun = false;
         this._errors = [];
         this._verificationSummary;
         this._isValid;
     }
 
     verify(schemas, eventName) {
-        if (this._verificationRun === true)
+        if (this._verificationhasBeenRun === true)
             throw new Error("Can't call verify more than once on the same object.");
-
         const dlEventSchema = joi.object({
             event: getEventNameSchema(eventName),
             event_id: eventId,
@@ -193,6 +194,7 @@ class DLEvent {
             this._isValid = true;
             this._verificationSummary = `${eventName} event with event_id: ${this.dataLayerObject.event_id} is valid.`;
         }
+        this._verificationhasBeenRun = true;
         return validation;
     }
 
@@ -262,7 +264,7 @@ const dl_add_to_cart_schema_example = {
                     name: "Clue Puzzle",
                     brand: "iDVENTURE",
                     category: "Puzzles",
-                    variant: null,
+                    variant: "Clue puzzle size large",
                     price: "40",
                     quantity: "1",
                     list: "/collections/puzzles",
@@ -281,12 +283,16 @@ class DLEventViewItem extends DLEvent {
         this.schemaExample = dl_view_item_schema_example;
     }
 
-    // Add anything additional to 'event_id' and 'event' that requires verification.
     verify() {
         return super.verify(
-            {
-                ecommerce: ecommerce('detail'),
-            },
+            ecommerceFactory("detail", {
+                list: stringSchema(
+                    `"list" is a required field on the actionField object and should contain the collection path to the product.`
+                ),
+                action: stringSchema(
+                    `"action" is a required field on the actionField object and should contain the string "detail"`
+                ),
+            }),
             "dl_view_item"
         );
     }
@@ -298,33 +304,44 @@ class DLEventAddToCart extends DLEvent {
         this.schemaExample = dl_add_to_cart_schema_example;
     }
 
-    // Add anything additional to 'event_id' and 'event' that requires verification.
     verify() {
-        return super.verify(
-            {
-                ecommerce: ecommerce('add'),
-            },
+        super.verify(
+            ecommerceFactory("add", {
+                list: stringSchema(
+                    `"list" is a required field on the actionField object and should contain the collection path to the product.`
+                ),
+                action: stringSchema(
+                    `"action" is a required field on the actionField object and should contain the string "add"`
+                ),
+            }),
             "dl_add_to_cart"
         );
     }
 }
 
-function evaluateDLEvent(dlEvent) {
-    const dlEventName = dlEvent.event;
+
+function ecommerceFactory(subField, fields) {
+    return {
+        // action field builder + pass name of field that's not currency.
+        ecommerce: ecommerce({
+            ecommerceSubField: subField,
+            actionField: {
+                ...fields,
+            },
+        }),
+    };
+}
+
+function evaluateDLEvent(dlEventObject) {
+    const dlEventName = dlEventObject.event;
     const dlEventMap = {
         dl_view_item: DLEventViewItem,
         dl_add_to_cart: DLEventAddToCart,
     };
-    if (typeof dlEvent !== "object") return;
+    if (typeof dlEventObject !== "object") return;
     if (dlEventName in dlEventMap) {
-        const dlEvent = new dlEventMap[dlEventName](dlEvent);
+        const dlEvent = new dlEventMap[dlEventName](dlEventObject);
         dlEvent.verify();
         dlEvent.logVerificationOutcome();
-    } else {
-        console.log(
-            "Event name: " +
-                dlEventName +
-                " not in available data layer verifiers"
-        );
     }
 }
