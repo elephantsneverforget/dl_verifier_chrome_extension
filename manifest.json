@@ -15,5 +15,11 @@
             "resources": ["index.js", "joi.js", "toastify.js", "verifier.js"],
             "matches" : ["<all_urls>"]
         }
-    ]
+    ],
+    
+    "icons": {
+        "128": "icon128.png",
+        "48": "icon48.png"
+    }
+
 }

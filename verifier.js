@@ -1,11 +1,17 @@
 class Logger {
-    static logToConsole(errors, verificationSummary, additionalText) {
-        if (errors.length > 1) {
+    static logToConsole(errors, verificationSummary, additionalText, dataLayerObject, schemaExample) {
+        if (errors.length > 0) {
             console.group(
-                "%c" + verificationSummary + additionalText,
+                "%c" + verificationSummary,
                 "background-color: #e0005a ; color: #ffffff ; font-weight: bold ; padding: 4px ;"
             );
-            errors.forEach((error) => console.log(error));
+            errors.forEach((error) => console.log(error.message));
+            console.group("Object pushed to datalayer");
+            console.log(dataLayerObject);
+            console.groupEnd();
+            console.group("Sample object");
+            console.log(schemaExample);
+            console.groupEnd();
             console.groupEnd();
         } else {
             console.log(
@@ -207,10 +213,9 @@ const userProperties = joi
     .object()
     .keys({
         visitor_type: joi
-            .string()
-            .pattern(new RegExp("^guest$"))
-            .required()
+            .any().valid("guest")
             .messages({
+                "any.only": `"visitor_type" is a required field on the user_properties object and should be one of "logged in" or "guest".`,
                 "any.required": `"visitor_type" is a required field on the user_properties object and should be one of "logged in" or "guest".`,
             }),
         user_id: joi.string().required().messages({
@@ -250,7 +255,7 @@ class DLEvent {
 
         if (validation.error) {
             this._isValid = false;
-            this._errors = validation.error;
+            this._errors = validation.error.details;
             this._verificationSummary = `${eventName} event with event_id ${this.dataLayerObject.event_id} is invalid`;
         } else {
             this._isValid = true;
@@ -276,7 +281,7 @@ class DLEvent {
         // Log details in console
         // Logger.logToToast(this._verificationSummary);
         // Log toast
-        Logger.logToConsole(this._errors, this._verificationSummary, additionalText);
+        Logger.logToConsole(this._errors, this._verificationSummary, additionalText, this.dataLayerObject, this.schemaExample);
     }
 }
 
