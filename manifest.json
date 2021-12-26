@@ -7,18 +7,20 @@
         {
             "matches": ["http://*/*", "https://*/*"],
             "js": ["inject.js"],
+            "css": ["./notyf.css"],
             "all_frames": true
         }
     ],
     "web_accessible_resources": [
         {
-            "resources": ["index.js", "joi.js", "toastify.js", "verifier.js"],
-            "matches" : ["<all_urls>"]
+            "resources": ["index.js", "verifier.js", "./notyf.css"],
+            "matches": ["<all_urls>"]
         }
     ],
-    
+
     "icons": {
         "128": "icon128.png",
         "48": "icon48.png"
-    }
+    },
+    "permissions": ["storage"]
 }

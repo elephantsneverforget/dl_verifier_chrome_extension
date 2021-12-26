@@ -13,4 +13,4 @@ function loadNextPlugin(plugins) {
   }
   
   
-  loadNextPlugin(["joi.js", "verifier.js", "index.js"]);
+  loadNextPlugin(["verifier.js", "index.js"]);
